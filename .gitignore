@@ -1,0 +1,52 @@
+# STM32 build output
+MDK-ARM/build/
+MDK-ARM/UART_Show_F103C8T6/
+MDK-ARM/bin/
+MDK-ARM/obj/
+MDK-ARM/out/
+
+# Keil/CMSIS/EIDE generated metadata and user-local settings
+MDK-ARM/.cmsis/
+MDK-ARM/.eide/
+MDK-ARM/.pack/
+MDK-ARM/.vscode/
+MDK-ARM/RTE/
+MDK-ARM/DebugConfig/
+MDK-ARM/.ingnore
+MDK-ARM/*.uvopt
+MDK-ARM/*.uvoptx
+MDK-ARM/*.uvgui*
+MDK-ARM/*.code-workspace
+
+# IAR user/debug settings
+EWARM/*.ewd
+
+# Generated listings, dependency files, object files and reports
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.bin
+*.elf
+*.map
+*.lst
+*.lnp
+*.htm
+*.dep
+*.db
+*.log
+*.params
+*.objlist
+*.lock
+*.dbgconf
+
+# Generic IDE/editor state
+.vs/
+.vscode/
+.settings/
+*.user
+*.suo
+*.tmp
+*.bak
+*.old
