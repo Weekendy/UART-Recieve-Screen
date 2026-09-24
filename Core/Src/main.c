@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
@@ -26,6 +27,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Control.h"
+#include "ring.h"
+#include "YFframe.h"
+#include "log.h"
 
 /* USER CODE END Includes */
 
@@ -78,7 +82,8 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  uint8_t cmd;
+  uint8_t data_length;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -90,11 +95,16 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_TIM1_Init();
+  
   /* USER CODE BEGIN 2 */
-  Control_init();
+  // Control_init();
+  ring_init();
+  YFframe_init();
+  log_init();
 
   /* USER CODE END 2 */
 
@@ -102,11 +112,20 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    ring_proc();
+    if(frame_ready)
+    {
+      frame_ready = 0;
+      YFframe_get_cmdAdata(&cmd, &data_length);
+      for(int i = 0; i < data_length; i++)
+      {
+        log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, YFframe_data_text[i]);
+      }
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    Control_Key_Proc();
-    Control_display_data_Proc();
+
   }
   /* USER CODE END 3 */
 }

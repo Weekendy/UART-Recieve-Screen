@@ -90,9 +90,16 @@
  *       若改为 1，还必须定义 ST7735_RST_GPIO_Port 和 ST7735_RST_Pin。
  */
 #ifndef ST7735_USE_RESET_PIN
-#define ST7735_USE_RESET_PIN 0
+#define ST7735_USE_RESET_PIN 1
 #endif
-/* 启用硬件复位时，还必须定义 ST7735_RST_GPIO_PORT 和 ST7735_RST_PIN。 */
+
+#ifndef ST7735_RST_GPIO_PORT
+#define ST7735_RST_GPIO_PORT RST_GPIO_Port
+#endif
+
+#ifndef ST7735_RST_PIN
+#define ST7735_RST_PIN RST_Pin
+#endif
 
 /** RGB565 黑色。 */
 #define ST7735_BLACK   0x0000U
