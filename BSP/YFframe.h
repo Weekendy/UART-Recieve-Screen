@@ -8,6 +8,7 @@
 #define RING_FRAME_HEAD_1 0xAA
 #define RING_FRAME_HEAD_2 0x55
 #define YFFRAME_DATA_MAX 0x40
+#define YFFRAME_DATA_TEXT_MAX 24
 
 // YFframe文件的函数返回状态
 typedef enum {
@@ -72,14 +73,17 @@ typedef struct {
     uint8_t checksum;
 } YFFrame_TypeDef;
 
-extern volatile uint8_t frame_ready;
-extern char YFframe_data_text[YFFRAME_DATA_MAX][24];
-extern uint8_t YFframe_data_text_length;
+typedef struct {
+    char data_text[YFFRAME_DATA_MAX][YFFRAME_DATA_TEXT_MAX];
+    uint8_t data_length;
+} YFFrame_Data_Text_TypeDef;
 
-YFFrame_Status_TypeDef YFframe_init();
+extern volatile uint8_t frame_ready;
+
+YFFrame_Status_TypeDef YFframe_init(void);
 YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b);
-YFFrame_Status_TypeDef YFframe_get_data_text(uint8_t *data_length);
+YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *data);
 YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd);
 YFFrame_Status_TypeDef YFframe_reset(void);
-YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, uint8_t *data_length);
+YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *data);
 #endif

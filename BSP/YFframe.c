@@ -1,8 +1,6 @@
 #include "YFframe.h"
 
 volatile uint8_t frame_ready;
-char YFframe_data_text[YFFRAME_DATA_MAX][24];
-uint8_t YFframe_data_text_length;
 
 static volatile YFFrame_TypeDef frame;
 static volatile YFFrame_TypeDef ready_frame;
@@ -171,9 +169,9 @@ YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd)
  * @param length 数据长度指针
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_get_data_text(uint8_t *data_length)
+YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *data)
 {
-    if (data_length == NULL)
+    if (data == NULL)
     {
         return YFFRAME_ERROR;
     }
@@ -184,39 +182,39 @@ YFFrame_Status_TypeDef YFframe_get_data_text(uint8_t *data_length)
         {
         case YFFRAME_U8_TYPE: {
             uint8_t u8_data = ready_frame.data[i].load.u8_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%d", u8_data);   
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%d", u8_data);
             break;  }
         case YFFRAME_I8_TYPE: {
             int8_t i8_data = ready_frame.data[i].load.i8_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%d", i8_data);
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%d", i8_data);
             break;  }
         case YFFRAME_U16_TYPE: {
             uint16_t u16_data = ready_frame.data[i].load.u16_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%d", u16_data);
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%d", u16_data);
             break;  }
         case YFFRAME_I16_TYPE: {
             int16_t i16_data = ready_frame.data[i].load.i16_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%d", i16_data);
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%d", i16_data);
             break;  }
         case YFFRAME_U32_TYPE: {
             uint32_t u32_data = ready_frame.data[i].load.u32_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%lu",
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%lu",
                      (unsigned long)u32_data);
             break;  }
         case YFFRAME_I32_TYPE: {
             int32_t i32_data = ready_frame.data[i].load.i32_data;
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%d", i32_data);
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%d", i32_data);
             break;  }
         case YFFRAME_FLOAT_TYPE: {
             float float_data = ready_frame.data[i].load.float_data;   
-            snprintf(YFframe_data_text[i], sizeof(YFframe_data_text[i]), "%.3f", float_data);
+            snprintf(data->data_text[i], sizeof(data->data_text[i]), "%.3f", float_data);
             break;  }
         default:
             return YFFRAME_ERROR;
         }
     }
 
-    *data_length = (uint8_t)ready_frame.length;
+    data->data_length = (uint8_t)ready_frame.length;
     return YFFRAME_OK;
 }
 
@@ -227,22 +225,24 @@ YFFrame_Status_TypeDef YFframe_get_data_text(uint8_t *data_length)
  * @param length 数据长度指针
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, uint8_t *data_length)
+YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *data)
 {
-    if(cmd == NULL ||  data_length == NULL)
+    if (cmd == NULL || data == NULL)
     {
         return YFFRAME_ERROR;
     }
 
-    if (frame_ready)
+    if (!frame_ready)
     {
-        frame_ready = 0;
-        if (YFframe_get_data_text(&YFframe_data_text_length) == YFFRAME_OK)
-        {
-            for (uint8_t i = 0; i < YFframe_data_text_length; i++)
-            {
-                log_printf("data[%d]=%s\r\n", i, YFframe_data_text[i]);
-            }
-        }
+        return YFFRAME_UNREADY;
     }
+
+    *cmd = ready_frame.cmd;
+    if (YFframe_get_data_text(data) != YFFRAME_OK)
+    {
+        return YFFRAME_ERROR;
+    }
+
+    frame_ready = 0;
+    return YFFRAME_OK;
 }

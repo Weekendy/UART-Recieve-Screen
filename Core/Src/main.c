@@ -73,7 +73,8 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  uint8_t cmd;
+  static YFFrame_Data_Text_TypeDef data;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -82,8 +83,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-  uint8_t cmd;
-  uint8_t data_length;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -115,11 +114,12 @@ int main(void)
     ring_proc();
     if(frame_ready)
     {
-      frame_ready = 0;
-      YFframe_get_cmdAdata(&cmd, &data_length);
-      for(int i = 0; i < data_length; i++)
+      if (YFframe_get_cmdAdata(&cmd, &data) == YFFRAME_OK)
       {
-        log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, YFframe_data_text[i]);
+        for(int i = 0; i < data.data_length; i++)
+        {
+          log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, data.data_text[i]);
+        }
       }
     }
     /* USER CODE END WHILE */

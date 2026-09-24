@@ -35,6 +35,7 @@ typedef struct {
 } Ring_TypeDef;
 
 extern volatile uint8_t rx_pending;
+extern volatile uint8_t rx_restart_pending;
 
 void ring_init(void);
 RING_STATUS_TypeDef ring_start(void);

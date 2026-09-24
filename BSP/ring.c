@@ -24,6 +24,7 @@
 #include "ring.h"
 
 volatile uint8_t rx_pending;
+volatile uint8_t rx_restart_pending;
 volatile Ring_TypeDef ring;
 
 /***
@@ -42,6 +43,8 @@ static uint16_t next_index(uint16_t *index)
 */
 void ring_init(void)
 {
+    rx_pending = 0U;
+    rx_restart_pending = 0U;
     ring.read_pos = 0;
     ring.overflow_flag = 0;
 
@@ -65,24 +68,42 @@ RING_STATUS_TypeDef ring_start(void)
  */
 RING_STATUS_TypeDef ring_proc(void)
 {
-    if(rx_pending)
-    {
-        rx_pending = 0;
+    uint8_t received = 0U;
 
+    if (rx_restart_pending != 0U)
+    {
+        rx_restart_pending = 0U;
+        YFframe_reset();
+        frame_ready = 0U;
+        ring.read_pos = 0U;
+        if (ring_start() != RING_OK)
+        {
+            rx_restart_pending = 1U;
+            return RING_ERROR;
+        }
+    }
+
+    /* Drain until the DMA write position is stable. */
+    for (;;)
+    {
         uint16_t write_pos = (RING_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(huart1.hdmarx)) % RING_BUFFER_SIZE;
 
+        if (ring.read_pos == write_pos)
+        {
+            break;
+        }
+
+        received = 1U;
         while (ring.read_pos != write_pos)
         {
             uint8_t b = ring.buffer[ring.read_pos];
-            uint8_t result = YFframe_parse_byte(b);
+            (void)YFframe_parse_byte(b);
             ring.read_pos = next_index(&ring.read_pos);
         }
-
-        rx_pending = 0;
-        return RING_OK;
     }
 
-    return RING_UNREADY;
+    rx_pending = 0;
+    return received ? RING_OK : RING_UNREADY;
 }
 
 /***
@@ -95,5 +116,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     if (huart->Instance == USART1)
     {
         rx_pending = 1;
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        rx_restart_pending = 1U;
     }
 }
