@@ -8,6 +8,7 @@
   * 中配置好相关的UART和DMA参数。
   ******************************************************************************
   */
+ 
 #ifndef RING_H
 #define RING_H
 
@@ -31,11 +32,15 @@ typedef struct {
     uint8_t buffer[RING_BUFFER_SIZE];
     uint16_t length;
     uint16_t read_pos;
+    uint32_t read_total;
+    uint32_t write_total;
+    uint16_t dma_write_pos;
     uint8_t overflow_flag;
 } Ring_TypeDef;
 
 extern volatile uint8_t rx_pending;
 extern volatile uint8_t rx_restart_pending;
+extern volatile uint32_t ring_overflow_count;
 
 void ring_init(void);
 RING_STATUS_TypeDef ring_start(void);

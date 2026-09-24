@@ -74,7 +74,8 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   uint8_t cmd;
-  static YFFrame_Data_Text_TypeDef data;
+  static YFFrame_Data_Text_TypeDef text;
+  static uint32_t reported_ring_overflow_count;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -112,14 +113,17 @@ int main(void)
   while (1)
   {
     ring_proc();
-    if(frame_ready)
+    if (ring_overflow_count != reported_ring_overflow_count)
     {
-      if (YFframe_get_cmdAdata(&cmd, &data) == YFFRAME_OK)
+      log_printf("ring overflow=%u\r\n", (unsigned int)ring_overflow_count);
+      reported_ring_overflow_count = ring_overflow_count;
+    }
+    
+    if (YFframe_get_cmdAdata(&cmd, &text) == YFFRAME_OK)
+    {
+      for(int i = 0; i < text.data_length; i++)
       {
-        for(int i = 0; i < data.data_length; i++)
-        {
-          log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, data.data_text[i]);
-        }
+        log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, text.data_text[i]);
       }
     }
     /* USER CODE END WHILE */

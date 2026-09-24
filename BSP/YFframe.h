@@ -1,8 +1,17 @@
+/**
+  ******************************************************************************
+  * @file    YFframe.h
+  * @brief   这个文件包含了所有YFframe.c的结构体和enum定义，以及函数声明。
+  ******************************************************************************
+  * @attention
+  * 无
+  ******************************************************************************
+  */
+
 #ifndef YFFRAME_H
 #define YFFRAME_H 
 
 #include "q_format.h"
-#include <stdio.h>
 #include <string.h>
 
 #define RING_FRAME_HEAD_1 0xAA
@@ -30,7 +39,7 @@ typedef enum {
     YFFRAME_FRAME_COMPLETE
 } YFFrame_Parse_State_TypeDef;
 
-// 帧数据类型
+// 帧数据类型枚举
 typedef enum
 {
     YFFRAME_U8_TYPE,
@@ -41,7 +50,6 @@ typedef enum
     YFFRAME_I32_TYPE,
     YFFRAME_FLOAT_TYPE,
 } Frame_Type_TypeDef;
-// 帧结构体
 
 // 帧数据联合体
 typedef union
@@ -64,6 +72,7 @@ typedef struct
     uint8_t load_index;
 } Frame_Data_TypeDef;
 
+// 帧结构体
 typedef struct {
     uint8_t state;
     uint16_t length;
@@ -73,17 +82,19 @@ typedef struct {
     uint8_t checksum;
 } YFFrame_TypeDef;
 
+// 帧数据文本结构体
 typedef struct {
     char data_text[YFFRAME_DATA_MAX][YFFRAME_DATA_TEXT_MAX];
     uint8_t data_length;
 } YFFrame_Data_Text_TypeDef;
 
 extern volatile uint8_t frame_ready;
+extern volatile YFFrame_TypeDef ready_frame;
 
 YFFrame_Status_TypeDef YFframe_init(void);
 YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b);
-YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *data);
+YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *text);
 YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd);
 YFFrame_Status_TypeDef YFframe_reset(void);
-YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *data);
+YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *text);
 #endif
