@@ -28,7 +28,7 @@ static void Control_Update_Receive_Status(void);
 void Control_init(void)
 {
     ST7735_init();
-    ST7735_fillScreen(ST7735_BLACK);
+    ST7735_fill_screen(ST7735_BLACK);
     Receive_Data_init();
     Screen_Data_reset_raw_display();
 

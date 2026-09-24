@@ -25,7 +25,7 @@ typedef enum {
     YFFRAME_ERROR,
     YFFRAME_UNCOMPLETED,
     YFFRAME_UNREADY,
-} YFFrame_Status_TypeDef;
+} YFframe_Status_TypeDef;
 
 // 解析帧状态
 typedef enum {
@@ -37,7 +37,7 @@ typedef enum {
     YFFRAME_DATA,
     YFFRAME_CHECKSUM,
     YFFRAME_FRAME_COMPLETE
-} YFFrame_Parse_State_TypeDef;
+} YFframe_Parse_State_TypeDef;
 
 // 帧数据类型枚举
 typedef enum
@@ -49,7 +49,7 @@ typedef enum
     YFFRAME_U32_TYPE,
     YFFRAME_I32_TYPE,
     YFFRAME_FLOAT_TYPE,
-} Frame_Type_TypeDef;
+} YFframe_Type_TypeDef;
 
 // 帧数据联合体
 typedef union
@@ -62,39 +62,41 @@ typedef union
     int32_t i32_data;
     float float_data;
     uint8_t raw[4];
-} Frame_Data_Type_TypeDef;
+} YFframe_Data_Type_TypeDef;
 
 // 帧数据存储结构体
 typedef struct
 {
-    Frame_Type_TypeDef type;
-    Frame_Data_Type_TypeDef load;
+    YFframe_Type_TypeDef type;
+    YFframe_Data_Type_TypeDef load;
     uint8_t load_index;
-} Frame_Data_TypeDef;
+} YFframe_Data_TypeDef;
 
 // 帧结构体
 typedef struct {
     uint8_t state;
     uint16_t length;
     uint8_t cmd;
-    Frame_Data_TypeDef data[YFFRAME_DATA_MAX];
+    YFframe_Data_TypeDef data[YFFRAME_DATA_MAX];
     uint8_t data_index;
     uint8_t checksum;
-} YFFrame_TypeDef;
+} YFframe_TypeDef;
 
 // 帧数据文本结构体
 typedef struct {
     char data_text[YFFRAME_DATA_MAX][YFFRAME_DATA_TEXT_MAX];
+    char data_type_text[YFFRAME_DATA_MAX][YFFRAME_DATA_TEXT_MAX];
     uint8_t data_length;
-} YFFrame_Data_Text_TypeDef;
+} YFframe_Data_Text_TypeDef;
 
 extern volatile uint8_t frame_ready;
-extern volatile YFFrame_TypeDef ready_frame;
+extern volatile YFframe_TypeDef ready_frame;
+extern const char YYFRAME_DATA_TYPE_TEXT[7][6];
 
-YFFrame_Status_TypeDef YFframe_init(void);
-YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b);
-YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *text);
-YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd);
-YFFrame_Status_TypeDef YFframe_reset(void);
-YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *text);
+YFframe_Status_TypeDef YFframe_init(void);
+YFframe_Status_TypeDef YFframe_parse_byte(uint8_t b);
+YFframe_Status_TypeDef YFframe_get_data_text(YFframe_Data_Text_TypeDef *text);
+YFframe_Status_TypeDef YFframe_get_cmd(uint8_t *cmd);
+YFframe_Status_TypeDef YFframe_reset(void);
+YFframe_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFframe_Data_Text_TypeDef *text);
 #endif

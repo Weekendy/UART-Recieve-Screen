@@ -1,3 +1,14 @@
+/**
+  ******************************************************************************
+  * @file    ring.h
+  * @brief   这个文件包含了所有st7735.c的结构体和enum定义，以及函数声明。
+  ******************************************************************************
+  * @attention
+  * SPI、GPIO、DMA、定时器句柄及引脚由 st7735.h 中的配置宏指定，
+  * 必须与 CubeMX 生成的工程配置保持一致。
+  ******************************************************************************
+  */
+
 #ifndef BSP_ST7735_H
 #define BSP_ST7735_H
 
@@ -6,12 +17,6 @@
 #include "tim.h"
 #include <stdint.h>
 
-/*
- * 板级硬件配置。
- * 可在包含本头文件之前重新定义以下宏，或直接修改默认值，使其与
- * CubeMX 生成的 SPI、定时器、GPIO 和 DMA 句柄保持一致。
- * ST7735_DMA_IRQ_HANDLER 必须与 CubeMX 中启用的 DMA 中断向量一致。
- */
 /** ST7735 所使用的 SPI 句柄。 */
 #ifndef ST7735_SPI_HANDLE
 #define ST7735_SPI_HANDLE hspi1
@@ -123,27 +128,27 @@
 
 void ST7735_init(void);
 
-void ST7735_setBacklight(uint16_t compare);
-void ST7735_drawPixel(uint16_t x, uint16_t y, uint16_t color);
-void ST7735_fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
-void ST7735_fillRectangleFast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
-void ST7735_fillScreen(uint16_t color);
-HAL_StatusTypeDef ST7735_fillScreenDMA(uint16_t color);
-HAL_StatusTypeDef ST7735_drawImageDMA(uint16_t x, uint16_t y, uint16_t w,
+void ST7735_set_BL(uint16_t compare);
+void ST7735_draw_pixel(uint16_t x, uint16_t y, uint16_t color);
+void ST7735_fill_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
+void ST7735_fill_rectangle_fast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
+void ST7735_fill_screen(uint16_t color);
+HAL_StatusTypeDef ST7735_fill_screenDMA(uint16_t color);
+HAL_StatusTypeDef ST7735_draw_imageDMA(uint16_t x, uint16_t y, uint16_t w,
                                       uint16_t h, const uint8_t *rgb565_be);
-uint8_t ST7735_isBusy(void);
-void ST7735_waitForDMA(void);
-void ST7735_drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *data);
-void ST7735_drawChar(uint16_t x, uint16_t y, char ch, uint8_t size,
+uint8_t ST7735_is_busy(void);
+void ST7735_wait_for_DMA(void);
+void ST7735_draw_image(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *data);
+void ST7735_show_char(uint16_t x, uint16_t y, char ch, uint8_t size,
                      uint16_t color, uint16_t bgcolor);
-void ST7735_writeString(uint16_t x, uint16_t y, const char *text, uint8_t size,
+void ST7735_show_string(uint16_t x, uint16_t y, const char *text, uint8_t size,
                         uint16_t color, uint16_t bgcolor);
-void ST7735_showInteger(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,
+void ST7735_show_integer(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,
                         uint8_t size, uint16_t color, uint16_t bgcolor);
-void ST7735_showDecimal(uint16_t x, uint16_t y, float value,
+void ST7735_show_decimal(uint16_t x, uint16_t y, float value,
                         uint8_t min_integer_digits, uint8_t decimal_digits,
                         uint8_t size, uint16_t color, uint16_t bgcolor);
-void ST7735_invertColors(uint8_t invert);
-void ST7735_setGamma(uint8_t gamma);
+void ST7735_invert_colors(uint8_t invert);
+void ST7735_set_gamma(uint8_t gamma);
 
 #endif

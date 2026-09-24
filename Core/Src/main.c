@@ -30,6 +30,7 @@
 #include "ring.h"
 #include "YFframe.h"
 #include "log.h"
+#include "Screen_Data.h"
 
 /* USER CODE END Includes */
 
@@ -74,7 +75,7 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
   uint8_t cmd;
-  static YFFrame_Data_Text_TypeDef text;
+  static YFframe_Data_Text_TypeDef text;
   static uint32_t reported_ring_overflow_count;
   /* USER CODE END 1 */
 
@@ -99,12 +100,12 @@ int main(void)
   MX_SPI1_Init();
   MX_USART1_UART_Init();
   MX_TIM1_Init();
-  
   /* USER CODE BEGIN 2 */
-  // Control_init();
+  log_init();
   ring_init();
   YFframe_init();
-  log_init();
+  Screen_Data_init();
+
 
   /* USER CODE END 2 */
 
@@ -123,7 +124,7 @@ int main(void)
     {
       for(int i = 0; i < text.data_length; i++)
       {
-        log_printf("cmd=%d, data[%d]=%s\r\n", cmd, i, text.data_text[i]);
+        Screen_Data_show_data(&cmd, &text);
       }
     }
     /* USER CODE END WHILE */

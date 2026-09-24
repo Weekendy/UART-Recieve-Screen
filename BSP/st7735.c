@@ -1,8 +1,26 @@
 /**
- * @file    st7735.c
- * @brief   ST7735 TFT 液晶屏驱动实现。
- * @note    通过 SPI 发送控制器命令和 RGB565 像素数据，GPIO 定义来自 CubeMX 工程。
- */
+  ******************************************************************************
+  * @file   st7735.c
+  * @brief  本文件实现 ST7735 TFT 液晶屏驱动。
+  *         通过 SPI 向控制器发送命令和 RGB565 像素数据，提供像素、矩形、
+  *         图像及文本绘制接口；较大的屏幕区域或图像数据可使用 SPI DMA 传输。
+  *         背光亮度通过配置的定时器 PWM 通道控制。
+  *
+  *         简要逻辑链路为：
+  *         绘图接口 -> 设置显示窗口并发送 RAMWR -> SPI/DMA 分块传输 RGB565 数据
+  *         -> DMA 完成回调启动后续数据块，全部传输完成后释放 CS。
+  ******************************************************************************
+  * @attention
+  * SPI、GPIO、DMA、定时器句柄及引脚由 st7735.h 中的配置宏指定，
+  * 必须与 CubeMX 生成的工程配置保持一致。
+  * 
+  * @note
+  * 1. 将文件 ring.c 和 ring.h 添加到工程中。
+  * 2. 外设初始化完成后调用 ST7735_init() 初始化显示控制器。
+  * 3. 调用 st7735.h 中声明的绘图接口更新屏幕内容。
+  * 4. 使用 DMA 绘图时，可通过 ST7735_is_busy() 或 ST7735_wait_for_DMA() 查询或等待传输完成。
+  ******************************************************************************
+  */
 #include "st7735.h"
 
 /**
@@ -59,6 +77,11 @@ static void st7735_wait_until_ready(void);
 void ST7735_BL_Start(void);
 #endif
 
+/**
+ * @brief 结束当前 ST7735 DMA 传输。
+ * @retval None
+ * @note 释放片选并清除 DMA 传输状态；传输完成或发生错误时调用。
+ */
 static void st7735_finish_dma(void)
 {
     ST7735_CS_HIGH();
@@ -67,6 +90,11 @@ static void st7735_finish_dma(void)
     st7735_dma_repeat_block = 0U;
 }
 
+/**
+ * @brief 等待 ST7735 DMA 传输完成。
+ * @retval None
+ * @note 该函数会阻塞当前流程，直到 DMA 忙标志被清除。
+ */
 static void st7735_wait_until_ready(void)
 {
     while (st7735_dma_busy != 0U) {
@@ -173,7 +201,7 @@ void ST7735_init(void)
 #endif
 
     /* 设置背光 PWM 占空比为 800 */
-    ST7735_setBacklight(ST7735_BACKLIGHT_DEFAULT_COMPARE);
+    ST7735_set_BL(ST7735_BACKLIGHT_DEFAULT_COMPARE);
 
     /** 完整显示模式下的帧率控制参数。 */
     static const uint8_t frame_rate[] = {0x01U, 0x2CU, 0x2DU};
@@ -227,7 +255,7 @@ void ST7735_init(void)
  * @param compare TIM3 通道 3 的比较值；大于自动重装载值时会被限制为该值。
  * @retval None
  */
-void ST7735_setBacklight(uint16_t compare)
+void ST7735_set_BL(uint16_t compare)
 {
     if (compare > __HAL_TIM_GET_AUTORELOAD(&ST7735_BACKLIGHT_TIMER_HANDLE)) {
         compare = __HAL_TIM_GET_AUTORELOAD(&ST7735_BACKLIGHT_TIMER_HANDLE);
@@ -244,7 +272,7 @@ void ST7735_setBacklight(uint16_t compare)
  * @retval None
  * @note 坐标越界时不执行绘制。
  */
-void ST7735_drawPixel(uint16_t x, uint16_t y, uint16_t color)
+void ST7735_draw_pixel(uint16_t x, uint16_t y, uint16_t color)
 {
     uint8_t data[2];
     if ((x >= ST7735_WIDTH) || (y >= ST7735_HEIGHT)) return;
@@ -266,7 +294,7 @@ void ST7735_drawPixel(uint16_t x, uint16_t y, uint16_t color)
  * @retval None
  * @note 超出屏幕右侧或下侧的区域会被裁剪，零宽或零高请求会被忽略。
  */
-void ST7735_fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+void ST7735_fill_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
     uint8_t line[ST7735_WIDTH * 2U];
     uint16_t i;
@@ -287,14 +315,20 @@ void ST7735_fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16
  * @param color RGB565 填充颜色。
  * @retval None
  */
-void ST7735_fillScreen(uint16_t color)
+void ST7735_fill_screen(uint16_t color)
 {
-    if (ST7735_fillScreenDMA(color) == HAL_OK) {
-        ST7735_waitForDMA();
+    if (ST7735_fill_screenDMA(color) == HAL_OK) {
+        ST7735_wait_for_DMA();
     }
 }
 
-HAL_StatusTypeDef ST7735_fillScreenDMA(uint16_t color)
+/**
+ * @brief 使用 SPI DMA 填充整个屏幕。
+ * @param color 填充颜色，RGB565 格式。
+ * @retval HAL_OK 启动成功；HAL_BUSY 已有 DMA 传输进行中；其他值表示启动失败。
+ * @note DMA 会重复发送内部颜色块，调用者无需提供屏幕大小的完整缓冲区。
+ */
+HAL_StatusTypeDef ST7735_fill_screenDMA(uint16_t color)
 {
     uint16_t index;
 
@@ -317,7 +351,17 @@ HAL_StatusTypeDef ST7735_fillScreenDMA(uint16_t color)
     return st7735_start_next_dma_block();
 }
 
-HAL_StatusTypeDef ST7735_drawImageDMA(uint16_t x, uint16_t y, uint16_t w,
+/**
+ * @brief 使用 SPI DMA 将 RGB565 图像写入屏幕。
+ * @param x 图像左上角横坐标。
+ * @param y 图像左上角纵坐标。
+ * @param w 图像宽度，单位：像素。
+ * @param h 图像高度，单位：像素。
+ * @param rgb565_be 图像数据首地址，按行优先排列，字节顺序为高字节在前。
+ * @retval HAL_OK 启动成功；HAL_BUSY 已有 DMA 传输进行中；HAL_ERROR 参数无效。
+ * @note 图像必须完整位于屏幕范围内，DMA 传输期间不要修改图像缓冲区。
+ */
+HAL_StatusTypeDef ST7735_draw_imageDMA(uint16_t x, uint16_t y, uint16_t w,
                                       uint16_t h, const uint8_t *rgb565_be)
 {
     if ((rgb565_be == NULL) || (w == 0U) || (h == 0U) ||
@@ -339,16 +383,30 @@ HAL_StatusTypeDef ST7735_drawImageDMA(uint16_t x, uint16_t y, uint16_t w,
     return st7735_start_next_dma_block();
 }
 
-uint8_t ST7735_isBusy(void)
+/**
+ * @brief 查询 ST7735 DMA 是否正在传输。
+ * @retval 非零值表示 DMA 忙，0 表示 DMA 空闲。
+ */
+uint8_t ST7735_is_busy(void)
 {
     return st7735_dma_busy;
 }
 
-void ST7735_waitForDMA(void)
+/**
+ * @brief 等待 ST7735 DMA 传输完成。
+ * @retval None
+ * @note 该函数会阻塞当前流程，直到当前 DMA 操作完成或结束。
+ */
+void ST7735_wait_for_DMA(void)
 {
     st7735_wait_until_ready();
 }
 
+/**
+ * @brief 启动下一块 ST7735 DMA 数据传输。
+ * @retval HAL_OK 启动成功或传输已完成；其他值表示 SPI DMA 启动失败。
+ * @note 由 DMA 完成回调和 DMA 绘图接口调用，用于分块发送大尺寸图像数据。
+ */
 static HAL_StatusTypeDef st7735_start_next_dma_block(void)
 {
     uint16_t bytes;
@@ -385,9 +443,9 @@ static HAL_StatusTypeDef st7735_start_next_dma_block(void)
  * @param color RGB565 填充颜色。
  * @retval None
  */
-void ST7735_fillRectangleFast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+void ST7735_fill_rectangle_fast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
-    ST7735_fillRectangle(x, y, w, h, color);
+    ST7735_fill_rectangle(x, y, w, h, color);
 }
 
 /**
@@ -400,7 +458,7 @@ void ST7735_fillRectangleFast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
  * @retval None
  * @note 数据为空、尺寸为零或图像未完全位于屏幕内时不执行绘制。
  */
-void ST7735_drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *data)
+void ST7735_draw_image(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *data)
 {
     uint8_t line[ST7735_WIDTH * 2U];
     uint16_t row, column;
@@ -526,7 +584,7 @@ static uint8_t st7735_glyph_row(char ch, uint8_t row)
  * @retval None
  * @note 字符完整区域越界或 size 为 0 时直接返回。
  */
-void ST7735_drawChar(uint16_t x, uint16_t y, char ch, uint8_t size,
+void ST7735_show_char(uint16_t x, uint16_t y, char ch, uint8_t size,
                      uint16_t color, uint16_t bgcolor)
 {
     uint8_t line[ST7735_WIDTH * 2U];
@@ -561,7 +619,7 @@ void ST7735_drawChar(uint16_t x, uint16_t y, char ch, uint8_t size,
  * @retval None
  * @note 文字到达右边界自动换行，到达下边界停止绘制；空指针或 size 为 0 时直接返回。
  */
-void ST7735_writeString(uint16_t x, uint16_t y, const char *text, uint8_t size,
+void ST7735_show_string(uint16_t x, uint16_t y, const char *text, uint8_t size,
                         uint16_t color, uint16_t bgcolor)
 {
     uint16_t char_width = 6U * (uint16_t)size;
@@ -571,11 +629,18 @@ void ST7735_writeString(uint16_t x, uint16_t y, const char *text, uint8_t size,
         if (*text == '\n') { x = 0U; y = (uint16_t)(y + char_height); text++; continue; }
         if (x > ST7735_WIDTH - char_width) { x = 0U; y = (uint16_t)(y + char_height); }
         if (y > ST7735_HEIGHT - char_height) break;
-        ST7735_drawChar(x, y, *text++, size, color, bgcolor);
+        ST7735_show_char(x, y, *text++, size, color, bgcolor);
         x = (uint16_t)(x + char_width);
     }
 }
 
+/**
+ * @brief 将无符号整数转换为十进制文本。
+ * @param text 输出文本缓冲区。
+ * @param value 要转换的无符号整数。
+ * @param min_digits 最小输出位数，不足时在左侧补零。
+ * @retval 转换后文本的字符数，不包含字符串结束符。
+ */
 static uint8_t st7735_write_unsigned(char *text, uint32_t value, uint8_t min_digits)
 {
     char reversed[10];
@@ -598,7 +663,19 @@ static uint8_t st7735_write_unsigned(char *text, uint32_t value, uint8_t min_dig
     return digits;
 }
 
-void ST7735_showInteger(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,
+/**
+ * @brief 在屏幕上显示一个整数。
+ * @param x 整数起始横坐标。
+ * @param y 整数起始纵坐标。
+ * @param value 要显示的有符号整数。
+ * @param min_digits 整数部分的最小显示位数，不足时在左侧补零。
+ * @param size 字符整数缩放倍数。
+ * @param color 字符前景色，RGB565 格式。
+ * @param bgcolor 字符背景色，RGB565 格式。
+ * @retval None
+ * @note 负数会显示负号；最终显示范围和换行规则由 ST7735_show_string() 处理。
+ */
+void ST7735_show_integer(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,
                         uint8_t size, uint16_t color, uint16_t bgcolor)
 {
     char text[12];
@@ -613,9 +690,17 @@ void ST7735_showInteger(uint16_t x, uint16_t y, int32_t value, uint8_t min_digit
     }
     length += st7735_write_unsigned(&text[length], magnitude, min_digits);
     text[length] = '\0';
-    ST7735_writeString(x, y, text, size, color, bgcolor);
+    ST7735_show_string(x, y, text, size, color, bgcolor);
 }
 
+/**
+ * @brief 根据 IEEE 754 位模式将浮点数转换为十进制文本。
+ * @param bits 浮点数的 IEEE 754 单精度位模式。
+ * @param text 输出文本缓冲区。
+ * @param min_integer_digits 整数部分的最小输出位数，不足时在左侧补零。
+ * @param decimal_digits 小数部分输出位数，最多支持 6 位。
+ * @retval 转换后文本的字符数；不支持的特殊值返回 0。
+ */
 static uint8_t st7735_format_float_bits(uint32_t bits, char *text,
                                        uint8_t min_integer_digits,
                                        uint8_t decimal_digits)
@@ -688,7 +773,20 @@ static uint8_t st7735_format_float_bits(uint32_t bits, char *text,
     return length;
 }
 
-void ST7735_showDecimal(uint16_t x, uint16_t y, float value,
+/**
+ * @brief 在屏幕上显示一个小数。
+ * @param x 小数起始横坐标。
+ * @param y 小数起始纵坐标。
+ * @param value 要显示的浮点数。
+ * @param min_integer_digits 整数部分的最小显示位数，不足时在左侧补零。
+ * @param decimal_digits 小数部分显示位数，最多支持 6 位。
+ * @param size 字符整数缩放倍数。
+ * @param color 字符前景色，RGB565 格式。
+ * @param bgcolor 字符背景色，RGB565 格式。
+ * @retval None
+ * @note 浮点数先转换为文本，再通过 ST7735_show_string() 绘制。
+ */
+void ST7735_show_decimal(uint16_t x, uint16_t y, float value,
                         uint8_t min_integer_digits, uint8_t decimal_digits,
                         uint8_t size, uint16_t color, uint16_t bgcolor)
 {
@@ -703,7 +801,7 @@ void ST7735_showDecimal(uint16_t x, uint16_t y, float value,
     length = st7735_format_float_bits(converter.bits, text,
                                       min_integer_digits, decimal_digits);
     if (length != 0U) {
-        ST7735_writeString(x, y, text, size, color, bgcolor);
+        ST7735_show_string(x, y, text, size, color, bgcolor);
     }
 }
 
@@ -712,7 +810,7 @@ void ST7735_showDecimal(uint16_t x, uint16_t y, float value,
  * @param invert 非零值开启颜色反相，0 关闭颜色反相。
  * @retval None
  */
-void ST7735_invertColors(uint8_t invert)
+void ST7735_invert_colors(uint8_t invert)
 {
     st7735_wait_until_ready();
     ST7735_CS_LOW();
@@ -725,7 +823,7 @@ void ST7735_invertColors(uint8_t invert)
  * @param gamma 控制器支持的 Gamma 编号，通常为 0~4。
  * @retval None
  */
-void ST7735_setGamma(uint8_t gamma)
+void ST7735_set_gamma(uint8_t gamma)
 {
     st7735_wait_until_ready();
     ST7735_CS_LOW();
@@ -733,6 +831,12 @@ void ST7735_setGamma(uint8_t gamma)
     ST7735_CS_HIGH();
 }
 
+/**
+ * @brief SPI DMA 发送完成回调。
+ * @param hspi 产生回调的 SPI 外设句柄。
+ * @retval None
+ * @note 当前 SPI 属于 ST7735 且仍有剩余数据时，继续发送下一数据块。
+ */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if ((hspi->Instance == ST7735_SPI_INSTANCE) && (st7735_dma_busy != 0U)) {
@@ -740,6 +844,12 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
     }
 }
 
+/**
+ * @brief SPI 错误回调。
+ * @param hspi 产生错误的 SPI 外设句柄。
+ * @retval None
+ * @note 当前 SPI 属于 ST7735 时结束 DMA 状态并释放片选。
+ */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
     if ((hspi->Instance == ST7735_SPI_INSTANCE) && (st7735_dma_busy != 0U)) {
@@ -749,6 +859,11 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
 
 #ifdef ST7735_SOFT_PWM_ENABLE
+/**
+ * @brief 启动 ST7735 背光的软件 PWM。
+ * @retval None
+ * @note 使用定时器更新中断和比较中断分别控制背光开启与关闭。
+ */
 void ST7735_BL_Start(void)
 {
     HAL_NVIC_SetPriority(TIM1_UP_IRQn, 1U, 0U);
@@ -759,14 +874,22 @@ void ST7735_BL_Start(void)
     HAL_TIM_OC_Start_IT(&ST7735_BACKLIGHT_TIMER_HANDLE, ST7735_BACKLIGHT_TIMER_CHANNEL);   // 比较中断：关灯
 }
 
-/* CNT 归零 → 开灯 */
+/**
+ * @brief 定时器更新事件回调，开启背光输出。
+ * @param htim 产生更新事件的定时器句柄。
+ * @retval None
+ */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == ST7735_BACKLIGHT_TIMER_HANDLE.Instance)
         HAL_GPIO_WritePin(ST7735_BL_GPIO_PORT, ST7735_BL_PIN, GPIO_PIN_SET);
 }
 
-/* CNT == CCR → 关灯 */
+/**
+ * @brief 定时器输出比较事件回调，关闭背光输出。
+ * @param htim 产生比较事件的定时器句柄。
+ * @retval None
+ */
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if ((htim->Instance == ST7735_BACKLIGHT_TIMER_HANDLE.Instance) &&

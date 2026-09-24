@@ -17,11 +17,11 @@ typedef enum
     FRAME_U32_TYPE,
     FRAME_I32_TYPE,
     FRAME_FLOAT_TYPE,
-} Frame_Type_TypeDef;
+} YFframe_Type_TypeDef;
 
 typedef struct
 {
-    Frame_Type_TypeDef type;
+    YFframe_Type_TypeDef type;
     uint8_t *u8_data;
     uint16_t *u16_data;
     uint32_t *u32_data;

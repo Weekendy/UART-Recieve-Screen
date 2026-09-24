@@ -7,7 +7,7 @@
   *         data_type是数据类型，data是数据内容，checksum是校验和。
   * 
   *         @data_tpye 有u8, i8, u16, i18, u32, i32, float类型，
-  *         详见枚举类型 @Frame_Type_TypeDef。
+  *         详见枚举类型 @YFframe_Type_TypeDef。
   *         @checksum 为从length到最后一个data的最后一位的校验和。
   *          
   *         简要逻辑链路为：
@@ -31,8 +31,9 @@
 
 volatile uint8_t frame_ready;
 
-static volatile YFFrame_TypeDef frame;
-volatile YFFrame_TypeDef ready_frame;
+static volatile YFframe_TypeDef frame;
+volatile YFframe_TypeDef ready_frame;
+const char YYFRAME_DATA_TYPE_TEXT[7][6] = { "u8", "i8", "u16", "i16", "u32", "i32", "float" };
 
 static void YFframe_write_u32(char *text, uint8_t capacity, uint32_t value);
 static void YFframe_write_i32(char *text, uint8_t capacity, int32_t value);
@@ -44,7 +45,7 @@ static void YFframe_write_float(char *text, uint8_t capacity, float value);
  * @param times 数据长度，搬运次数
  * @retval YFframe状态
  */
-static YFFrame_Status_TypeDef YFframe_put_load_times(uint8_t b, uint8_t times)
+static YFframe_Status_TypeDef YFframe_put_load_times(uint8_t b, uint8_t times)
 {
     frame.data[frame.data_index].load.raw[frame.data[frame.data_index].load_index] = b;
     frame.data[frame.data_index].load_index++;
@@ -77,7 +78,7 @@ static YFFrame_Status_TypeDef YFframe_put_load_times(uint8_t b, uint8_t times)
  * @brief 初始化帧结构体
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_init(void)
+YFframe_Status_TypeDef YFframe_init(void)
 {
     YFframe_reset();
     return YFFRAME_OK;
@@ -88,7 +89,7 @@ YFFrame_Status_TypeDef YFframe_init(void)
  * @param b 字节
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b)
+YFframe_Status_TypeDef YFframe_parse_byte(uint8_t b)
 {
     switch (frame.state)
     {
@@ -131,7 +132,7 @@ YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b)
             frame.state = YFFRAME_WAITING_HEAD_1;
             return YFFRAME_ERROR;
         }
-        frame.data[frame.data_index].type = (Frame_Type_TypeDef)b;
+        frame.data[frame.data_index].type = (YFframe_Type_TypeDef)b;
         frame.checksum += b;
         frame.state = YFFRAME_DATA;
         frame.data[frame.data_index].load_index = 0;
@@ -177,7 +178,7 @@ YFFrame_Status_TypeDef YFframe_parse_byte(uint8_t b)
  * @brief 重置帧结构体
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_reset()
+YFframe_Status_TypeDef YFframe_reset()
 {
     frame.state = YFFRAME_WAITING_HEAD_1;
     frame.length = 0;
@@ -192,7 +193,7 @@ YFFrame_Status_TypeDef YFframe_reset()
  * @param cmd 命令字节指针
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd)
+YFframe_Status_TypeDef YFframe_get_cmd(uint8_t *cmd)
 {
     if (cmd == NULL)
     {
@@ -207,17 +208,20 @@ YFFrame_Status_TypeDef YFframe_get_cmd(uint8_t *cmd)
  * @param data 数据结构体指针
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *text)
+YFframe_Status_TypeDef YFframe_get_data_text(YFframe_Data_Text_TypeDef *text)
 {
     if (text == NULL)
     {
         return YFFRAME_ERROR;
     }
 
+    YFframe_Type_TypeDef data_type;
     // 逐数据转化为字符串存在data->data_text中
     for (uint8_t i = 0; i < ready_frame.length; i++)
     {
-        switch (ready_frame.data[i].type)
+        data_type = ready_frame.data[i].type;
+        strcpy(text->data_type_text[i], YYFRAME_DATA_TYPE_TEXT[data_type]);
+        switch (data_type)
         {
         case YFFRAME_U8_TYPE: {
             uint8_t u8_data = ready_frame.data[i].load.u8_data;
@@ -263,7 +267,7 @@ YFFrame_Status_TypeDef YFframe_get_data_text(YFFrame_Data_Text_TypeDef *text)
  * @param length 数据长度指针
  * @retval YFframe状态
  */
-YFFrame_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFFrame_Data_Text_TypeDef *text)
+YFframe_Status_TypeDef YFframe_get_cmdAdata(uint8_t *cmd, YFframe_Data_Text_TypeDef *text)
 {
     if (!frame_ready)
     {
