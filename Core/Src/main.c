@@ -122,11 +122,9 @@ int main(void)
     
     if (YFframe_get_cmdAdata(&cmd, &text) == YFFRAME_OK)
     {
-      for(int i = 0; i < text.data_length; i++)
-      {
         Screen_Data_show_data(&cmd, &text);
-      }
     }
+    Screen_Data_show_FPS();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

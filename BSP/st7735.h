@@ -133,14 +133,30 @@ void ST7735_draw_pixel(uint16_t x, uint16_t y, uint16_t color);
 void ST7735_fill_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 void ST7735_fill_rectangle_fast(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
 void ST7735_fill_screen(uint16_t color);
-HAL_StatusTypeDef ST7735_fill_screenDMA(uint16_t color);
-HAL_StatusTypeDef ST7735_draw_imageDMA(uint16_t x, uint16_t y, uint16_t w,
-                                      uint16_t h, const uint8_t *rgb565_be);
 uint8_t ST7735_is_busy(void);
 void ST7735_wait_for_DMA(void);
 void ST7735_draw_image(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t *data);
 void ST7735_show_char(uint16_t x, uint16_t y, char ch, uint8_t size,
                      uint16_t color, uint16_t bgcolor);
+/**
+ * @brief 在指定行绘制字符串，使用 SPI DMA 发送 RGB565 像素数据。
+ * @param x 行起始横坐标。
+ * @param y 行起始纵坐标。
+ * @param text 字符串地址；遇到 '\0' 时停止读取。
+ * @param size 字符整数缩放倍数。
+ * @param length 最多绘制的字符数；屏幕或 DMA 缓冲区容纳不下时会截断。
+ * @param color 字符前景色，RGB565 格式。
+ * @param bgcolor 字符背景色，RGB565 格式。
+ * @retval None
+ * @note 新一轮绘制会等待当前 DMA 完成；可通过 ST7735_is_busy() 查询状态。
+ */
+void ST7735_show_line_string(uint16_t x, uint16_t y, const char *text,
+                             uint8_t size, uint8_t length,
+                             uint16_t color, uint16_t bgcolor);
+void ST7735_show_line_string(uint16_t x, uint16_t y, const char *text, uint8_t size,
+uint8_t length, uint16_t color, uint16_t bgcolor);
+void ST7735_show_string_DMA(uint16_t x, uint16_t y, const char *text, uint8_t size,
+                        uint16_t color, uint16_t bgcolor);
 void ST7735_show_string(uint16_t x, uint16_t y, const char *text, uint8_t size,
                         uint16_t color, uint16_t bgcolor);
 void ST7735_show_integer(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,

@@ -91,7 +91,7 @@ typedef struct {
 
 extern volatile uint8_t frame_ready;
 extern volatile YFframe_TypeDef ready_frame;
-extern const char YYFRAME_DATA_TYPE_TEXT[7][6];
+extern const char YYFRAME_DATA_TYPE_TEXT[7][10];
 
 YFframe_Status_TypeDef YFframe_init(void);
 YFframe_Status_TypeDef YFframe_parse_byte(uint8_t b);

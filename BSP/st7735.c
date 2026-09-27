@@ -54,6 +54,9 @@
 #define ST7735_GMCTRN1 0xE1U
 
 #define ST7735_DMA_BLOCK_BYTES 512U
+#define ST7735_CHAR_1_WIDTH 6U
+#define ST7735_CHAR_1_HEIGHT 8U
+#define ST7735_LINE_BUF_SIZE 2048
 
 #define ST7735_SOFT_PWM_ENABLE
 
@@ -64,13 +67,9 @@
 #define ST7735_DC_COMMAND() HAL_GPIO_WritePin(ST7735_DC_GPIO_PORT, ST7735_DC_PIN, GPIO_PIN_RESET)
 #define ST7735_DC_DATA()    HAL_GPIO_WritePin(ST7735_DC_GPIO_PORT, ST7735_DC_PIN, GPIO_PIN_SET)
 
-static uint8_t st7735_dma_block[ST7735_DMA_BLOCK_BYTES];
-static const uint8_t *st7735_dma_data;
-static volatile uint32_t st7735_dma_remaining;
+static uint8_t st7735_dma_line_buf[ST7735_LINE_BUF_SIZE];
 static volatile uint8_t st7735_dma_busy;
-static volatile uint8_t st7735_dma_repeat_block;
 
-static HAL_StatusTypeDef st7735_start_next_dma_block(void);
 static void st7735_wait_until_ready(void);
 
 #ifdef ST7735_SOFT_PWM_ENABLE
@@ -85,9 +84,7 @@ void ST7735_BL_Start(void);
 static void st7735_finish_dma(void)
 {
     ST7735_CS_HIGH();
-    st7735_dma_remaining = 0U;
     st7735_dma_busy = 0U;
-    st7735_dma_repeat_block = 0U;
 }
 
 /**
@@ -248,6 +245,7 @@ void ST7735_init(void)
     st7735_command(ST7735_DISPON);
     HAL_Delay(100U);
     ST7735_CS_HIGH();
+    ST7735_fill_rectangle(0, 0, ST7735_WIDTH, ST7735_HEIGHT, ST7735_BLACK);
 }
 
 /**
@@ -317,70 +315,7 @@ void ST7735_fill_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
  */
 void ST7735_fill_screen(uint16_t color)
 {
-    if (ST7735_fill_screenDMA(color) == HAL_OK) {
-        ST7735_wait_for_DMA();
-    }
-}
 
-/**
- * @brief 使用 SPI DMA 填充整个屏幕。
- * @param color 填充颜色，RGB565 格式。
- * @retval HAL_OK 启动成功；HAL_BUSY 已有 DMA 传输进行中；其他值表示启动失败。
- * @note DMA 会重复发送内部颜色块，调用者无需提供屏幕大小的完整缓冲区。
- */
-HAL_StatusTypeDef ST7735_fill_screenDMA(uint16_t color)
-{
-    uint16_t index;
-
-    if (st7735_dma_busy != 0U) {
-        return HAL_BUSY;
-    }
-
-    for (index = 0U; index < ST7735_DMA_BLOCK_BYTES; index += 2U) {
-        st7735_dma_block[index] = (uint8_t)(color >> 8);
-        st7735_dma_block[index + 1U] = (uint8_t)color;
-    }
-
-    ST7735_CS_LOW();
-    st7735_window(0U, 0U, ST7735_WIDTH - 1U, ST7735_HEIGHT - 1U);
-    ST7735_DC_DATA();
-    st7735_dma_data = st7735_dma_block;
-    st7735_dma_remaining = ST7735_WIDTH * ST7735_HEIGHT * 2U;
-    st7735_dma_repeat_block = 1U;
-    st7735_dma_busy = 1U;
-    return st7735_start_next_dma_block();
-}
-
-/**
- * @brief 使用 SPI DMA 将 RGB565 图像写入屏幕。
- * @param x 图像左上角横坐标。
- * @param y 图像左上角纵坐标。
- * @param w 图像宽度，单位：像素。
- * @param h 图像高度，单位：像素。
- * @param rgb565_be 图像数据首地址，按行优先排列，字节顺序为高字节在前。
- * @retval HAL_OK 启动成功；HAL_BUSY 已有 DMA 传输进行中；HAL_ERROR 参数无效。
- * @note 图像必须完整位于屏幕范围内，DMA 传输期间不要修改图像缓冲区。
- */
-HAL_StatusTypeDef ST7735_draw_imageDMA(uint16_t x, uint16_t y, uint16_t w,
-                                      uint16_t h, const uint8_t *rgb565_be)
-{
-    if ((rgb565_be == NULL) || (w == 0U) || (h == 0U) ||
-        (x >= ST7735_WIDTH) || (y >= ST7735_HEIGHT) ||
-        (w > ST7735_WIDTH - x) || (h > ST7735_HEIGHT - y)) {
-        return HAL_ERROR;
-    }
-    if (st7735_dma_busy != 0U) {
-        return HAL_BUSY;
-    }
-
-    ST7735_CS_LOW();
-    st7735_window(x, y, (uint16_t)(x + w - 1U), (uint16_t)(y + h - 1U));
-    ST7735_DC_DATA();
-    st7735_dma_data = rgb565_be;
-    st7735_dma_remaining = (uint32_t)w * h * 2U;
-    st7735_dma_repeat_block = 0U;
-    st7735_dma_busy = 1U;
-    return st7735_start_next_dma_block();
 }
 
 /**
@@ -400,38 +335,6 @@ uint8_t ST7735_is_busy(void)
 void ST7735_wait_for_DMA(void)
 {
     st7735_wait_until_ready();
-}
-
-/**
- * @brief 启动下一块 ST7735 DMA 数据传输。
- * @retval HAL_OK 启动成功或传输已完成；其他值表示 SPI DMA 启动失败。
- * @note 由 DMA 完成回调和 DMA 绘图接口调用，用于分块发送大尺寸图像数据。
- */
-static HAL_StatusTypeDef st7735_start_next_dma_block(void)
-{
-    uint16_t bytes;
-    HAL_StatusTypeDef status;
-
-    if (st7735_dma_remaining == 0U) {
-        st7735_finish_dma();
-        return HAL_OK;
-    }
-
-    bytes = (st7735_dma_remaining > ST7735_DMA_BLOCK_BYTES) ?
-            ST7735_DMA_BLOCK_BYTES : (uint16_t)st7735_dma_remaining;
-    status = HAL_SPI_Transmit_DMA(&ST7735_SPI_HANDLE,
-                                  st7735_dma_repeat_block ? st7735_dma_block : (uint8_t *)st7735_dma_data,
-                                  bytes);
-    if (status != HAL_OK) {
-        st7735_finish_dma();
-        return status;
-    }
-
-    if (st7735_dma_repeat_block == 0U) {
-        st7735_dma_data += bytes;
-    }
-    st7735_dma_remaining -= bytes;
-    return HAL_OK;
 }
 
 /**
@@ -547,15 +450,15 @@ static uint8_t st7735_glyph_row(char ch, uint8_t row)
     if ((code >= (uint8_t)'A') && (code <= (uint8_t)'Z')) return st7735_uppercase[code - (uint8_t)'A'][row];
     if ((code >= (uint8_t)'0') && (code <= (uint8_t)'9')) return st7735_digits[code - (uint8_t)'0'][row];
     switch (code) {
-    case ' ': return 0x00U; case '!': return (row == 6U) ? 0x04U : ((row < 5U) ? 0x04U : 0x00U);
+    case ' ': return 0x00U; case '!': return (row == ST7735_CHAR_1_WIDTH) ? 0x04U : ((row < 5U) ? 0x04U : 0x00U);
     case '"': return (row < 2U) ? 0x0AU : 0x00U; case '#': return (row == 1U || row == 4U) ? 0x1FU : ((row == 0U || row == 2U || row == 3U || row == 5U) ? 0x0AU : 0x00U);
     case '$': { static const uint8_t g[7] = {0x0EU,0x15U,0x14U,0x0EU,0x05U,0x15U,0x0EU}; return g[row]; }
     case '%': { static const uint8_t g[7] = {0x19U,0x19U,0x02U,0x04U,0x08U,0x13U,0x13U}; return g[row]; }
     case '&': { static const uint8_t g[7] = {0x0CU,0x12U,0x14U,0x08U,0x15U,0x12U,0x0DU}; return g[row]; }
-    case '\'': return (row < 2U) ? 0x04U : 0x00U; case '(': return (row == 0U || row == 6U) ? 0x02U : ((row == 1U || row == 5U) ? 0x04U : 0x08U);
-    case ')': return (row == 0U || row == 6U) ? 0x08U : ((row == 1U || row == 5U) ? 0x04U : 0x02U); case '*': return (row == 2U) ? 0x1FU : ((row == 1U || row == 3U) ? 0x0AU : 0x00U);
+    case '\'': return (row < 2U) ? 0x04U : 0x00U; case '(': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x02U : ((row == 1U || row == 5U) ? 0x04U : 0x08U);
+    case ')': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x08U : ((row == 1U || row == 5U) ? 0x04U : 0x02U); case '*': return (row == 2U) ? 0x1FU : ((row == 1U || row == 3U) ? 0x0AU : 0x00U);
     case '+': return (row == 3U) ? 0x1FU : ((row == 2U || row == 4U) ? 0x04U : 0x00U); case ',': return (row >= 5U) ? 0x04U : 0x00U;
-    case '-': return (row == 3U) ? 0x1FU : 0x00U; case '.': return (row == 6U) ? 0x04U : 0x00U;
+    case '-': return (row == 3U) ? 0x1FU : 0x00U; case '.': return (row == ST7735_CHAR_1_WIDTH) ? 0x04U : 0x00U;
     case '/': { static const uint8_t g[7] = {0x01U,0x02U,0x02U,0x04U,0x08U,0x08U,0x10U}; return g[row]; }
     case ':': return (row == 2U || row == 5U) ? 0x04U : 0x00U; case ';': return (row == 2U || row >= 5U) ? 0x04U : 0x00U;
     case '<': return (row == 1U || row == 5U) ? 0x04U : ((row == 2U || row == 4U) ? 0x08U : ((row == 3U) ? 0x10U : 0x00U));
@@ -563,12 +466,12 @@ static uint8_t st7735_glyph_row(char ch, uint8_t row)
     case '>': return (row == 1U || row == 5U) ? 0x04U : ((row == 2U || row == 4U) ? 0x02U : ((row == 3U) ? 0x01U : 0x00U));
     case '?': { static const uint8_t g[7] = {0x0EU,0x11U,0x01U,0x02U,0x04U,0x00U,0x04U}; return g[row]; }
     case '@': { static const uint8_t g[7] = {0x0EU,0x11U,0x17U,0x15U,0x17U,0x10U,0x0EU}; return g[row]; }
-    case '[': return (row == 0U || row == 6U) ? 0x0EU : 0x08U;
+    case '[': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x0EU : 0x08U;
     case '\\': { static const uint8_t g[7] = {0x10U,0x08U,0x08U,0x04U,0x02U,0x02U,0x01U}; return g[row]; }
-    case ']': return (row == 0U || row == 6U) ? 0x0EU : 0x02U; case '^': return (row == 0U) ? 0x04U : ((row == 1U) ? 0x0AU : ((row == 2U) ? 0x11U : 0x00U));
-    case '_': return (row == 6U) ? 0x1FU : 0x00U; case '`': return (row == 0U) ? 0x08U : ((row == 1U) ? 0x04U : 0x00U);
-    case '{': return (row == 0U || row == 6U) ? 0x06U : ((row == 3U) ? 0x04U : ((row == 1U || row == 2U) ? 0x08U : 0x08U));
-    case '|': return 0x04U; case '}': return (row == 0U || row == 6U) ? 0x0CU : ((row == 3U) ? 0x04U : 0x02U);
+    case ']': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x0EU : 0x02U; case '^': return (row == 0U) ? 0x04U : ((row == 1U) ? 0x0AU : ((row == 2U) ? 0x11U : 0x00U));
+    case '_': return (row == ST7735_CHAR_1_WIDTH) ? 0x1FU : 0x00U; case '`': return (row == 0U) ? 0x08U : ((row == 1U) ? 0x04U : 0x00U);
+    case '{': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x06U : ((row == 3U) ? 0x04U : ((row == 1U || row == 2U) ? 0x08U : 0x08U));
+    case '|': return 0x04U; case '}': return (row == 0U || row == ST7735_CHAR_1_WIDTH) ? 0x0CU : ((row == 3U) ? 0x04U : 0x02U);
     case '~': return (row == 3U) ? 0x09U : ((row == 2U) ? 0x12U : 0x00U); default: return 0x00U;
     }
 }
@@ -588,24 +491,175 @@ void ST7735_show_char(uint16_t x, uint16_t y, char ch, uint8_t size,
                      uint16_t color, uint16_t bgcolor)
 {
     uint8_t line[ST7735_WIDTH * 2U];
-    uint16_t char_width = 6U * (uint16_t)size;
-    uint16_t char_height = 8U * (uint16_t)size;
+    uint16_t char_width = ST7735_CHAR_1_WIDTH * (uint16_t)size;
+    uint16_t char_height = ST7735_CHAR_1_HEIGHT * (uint16_t)size;
     uint16_t row, column, sx, sy, index;
     if ((size == 0U) || (char_width > ST7735_WIDTH) || (char_height > ST7735_HEIGHT) ||
         (x > ST7735_WIDTH - char_width) || (y > ST7735_HEIGHT - char_height)) return;
     st7735_wait_until_ready();
     ST7735_CS_LOW();
     st7735_window(x, y, (uint16_t)(x + char_width - 1U), (uint16_t)(y + char_height - 1U));
-    for (row = 0U; row < 8U; row++) {
+    for (row = 0U; row < ST7735_CHAR_1_HEIGHT; row++) {
         uint8_t glyph_row = (row < ST7735_FONT_HEIGHT) ? st7735_glyph_row(ch, (uint8_t)row) : 0U;
         index = 0U;
-        for (column = 0U; column < 6U; column++) {
+        for (column = 0U; column < ST7735_CHAR_1_WIDTH; column++) {
             uint16_t pixel = (column < ST7735_FONT_WIDTH && (glyph_row & (1U << (4U - column))) != 0U) ? color : bgcolor;
             for (sx = 0U; sx < size; sx++) { line[index++] = (uint8_t)(pixel >> 8); line[index++] = (uint8_t)pixel; }
         }
         for (sy = 0U; sy < size; sy++) st7735_data(line, index);
     }
     ST7735_CS_HIGH();
+}
+
+/**
+ * @brief 绘制一行的字符串，利用DMA减少CPU负担。
+ * @param x 字符串起始横坐标。
+ * @param y 字符串起始纵坐标。
+ * @param text 以 '\0' 结尾的字符串；'\n' 会使光标移至下一行行首。
+ * @param size 字符整数缩放倍数。
+ * @param length 字符串的长度。
+ * @param color 字符前景色，RGB565 格式。
+ * @param bgcolor 字符背景色，RGB565 格式。
+ * @retval None
+ * @note 文字到达右边界自动换行，到达下边界停止绘制；空指针或 size 为 0 时直接返回。
+ */
+void ST7735_show_line_string(uint16_t x, uint16_t y, const char *text, uint8_t size,
+                             uint8_t length, uint16_t color, uint16_t bgcolor)
+{
+    uint16_t char_width;
+    uint16_t char_height;
+    uint16_t draw_chars;
+    uint16_t char_index;
+    uint16_t pixel_y;
+    uint16_t pixel_x;
+    uint32_t bytes_per_char;
+    uint32_t max_chars_by_buffer;
+    uint32_t buffer_index = 0U;
+
+    /* 参数无效或起点位于屏幕外时，不启动绘制。 */
+    if ((text == NULL) || (length == 0U) || (size == 0U) ||
+        (x >= ST7735_WIDTH) || (y >= ST7735_HEIGHT))
+    {
+        return;
+    }
+
+    char_width = ST7735_CHAR_1_WIDTH * (uint16_t)size;
+    char_height = ST7735_CHAR_1_HEIGHT * (uint16_t)size;
+    if ((char_width > ST7735_WIDTH - x) || (char_height > ST7735_HEIGHT - y))
+    {
+        return;
+    }
+
+    /* 按屏幕宽度和静态 DMA 缓冲区容量限制本次可绘制字符数。 */
+    bytes_per_char = (uint32_t)char_width * char_height * 2U;
+    max_chars_by_buffer = ST7735_LINE_BUF_SIZE / bytes_per_char;
+    draw_chars = length;
+    if (draw_chars > (ST7735_WIDTH - x) / char_width)
+    {
+        draw_chars = (ST7735_WIDTH - x) / char_width;
+    }
+    if (draw_chars > max_chars_by_buffer)
+    {
+        draw_chars = (uint16_t)max_chars_by_buffer;
+    }
+    /* length 是最大字符数；遇到字符串结束符时提前停止。 */
+    for (char_index = 0U; char_index < draw_chars; char_index++)
+    {
+        if (text[char_index] == '\0')
+        {
+            draw_chars = char_index;
+            break;
+        }
+    }
+    if (draw_chars == 0U)
+    {
+        return;
+    }
+
+    /* DMA 使用共享缓冲区，必须等上一次传输结束后才能改写它。 */
+    st7735_wait_until_ready();
+    /* 将字模按 size 放大，并按 RGB565 高字节在前的顺序展开到缓冲区。 */
+    for (pixel_y = 0U; pixel_y < char_height; pixel_y++)
+    {
+        uint16_t glyph_y = pixel_y / size;
+        for (char_index = 0U; char_index < draw_chars; char_index++)
+        {
+            uint8_t glyph_row = (glyph_y < ST7735_FONT_HEIGHT) ?
+                                st7735_glyph_row(text[char_index], (uint8_t)glyph_y) : 0U;
+            for (pixel_x = 0U; pixel_x < char_width; pixel_x++)
+            {
+                uint16_t glyph_x = pixel_x / size;
+                uint16_t pixel = ((glyph_x < ST7735_FONT_WIDTH) &&
+                                  ((glyph_row & (1U << (ST7735_FONT_WIDTH - 1U - glyph_x))) != 0U)) ?
+                                 color : bgcolor;
+                st7735_dma_line_buf[buffer_index++] = (uint8_t)(pixel >> 8);
+                st7735_dma_line_buf[buffer_index++] = (uint8_t)pixel;
+            }
+        }
+    }
+
+    /* 设置与缓冲区像素数一致的窗口，再异步发送；完成回调负责释放 CS。 */
+    ST7735_CS_LOW();
+    st7735_window(x, y,
+                  (uint16_t)(x + draw_chars * char_width - 1U),
+                  (uint16_t)(y + char_height - 1U));
+    ST7735_DC_DATA();
+    st7735_dma_busy = 1U;
+    if (HAL_SPI_Transmit_DMA(&ST7735_SPI_HANDLE, st7735_dma_line_buf,
+                             (uint16_t)buffer_index) != HAL_OK)
+    {
+        st7735_finish_dma();
+    }
+}
+
+/**
+ * @brief 绘制字符串，并支持换行和自动折行，利用DMA减少CPU负担。
+ * @param x 字符串起始横坐标。
+ * @param y 字符串起始纵坐标。
+ * @param text 以 '\0' 结尾的字符串；'\n' 会使光标移至下一行行首。
+ * @param size 字符整数缩放倍数。
+ * @param color 字符前景色，RGB565 格式。
+ * @param bgcolor 字符背景色，RGB565 格式。
+ * @retval None
+ * @note 文字到达右边界自动换行，到达下边界停止绘制；空指针或 size 为 0 时直接返回。
+ */
+void ST7735_show_string_DMA(uint16_t x, uint16_t y, const char *text, uint8_t size,
+                        uint16_t color, uint16_t bgcolor)
+{
+    if(text == NULL || size == 0U)
+        return;
+
+    uint16_t char_width = ST7735_CHAR_1_WIDTH * (uint16_t)size;
+    uint16_t char_height = ST7735_CHAR_1_HEIGHT * (uint16_t)size;
+    char line_text[ST7735_WIDTH / char_width + 1];
+    uint16_t line_text_index = 0U;
+    if ((text == NULL) || (size == 0U) || (char_width > ST7735_WIDTH) || (char_height > ST7735_HEIGHT)) return;
+    while (*text != '\0') {
+        if (*text == '\n')
+        {
+            x = 0U;
+            line_text[line_text_index] = '\0';
+            ST7735_show_line_string(x, y, line_text, size, line_text_index, color, bgcolor);
+            y = y + char_height;
+            line_text_index = 0U;
+            text++;
+            continue;
+        }
+        if (x > ST7735_WIDTH - char_width)
+        {
+            x = 0U;
+            line_text[line_text_index] = '\0';
+            ST7735_show_line_string(x, y, line_text, size, line_text_index, color, bgcolor);
+            y = (uint16_t)(y + char_height);
+            line_text_index = 0U;
+        }
+        if (y > ST7735_HEIGHT - char_height)
+            break;
+        line_text[line_text_index++] = *text;
+        x += char_width;
+        text++;
+    }
+    ST7735_show_line_string(x, y, line_text, size, line_text_index, color, bgcolor);
 }
 
 /**
@@ -673,7 +727,7 @@ static uint8_t st7735_write_unsigned(char *text, uint32_t value, uint8_t min_dig
  * @param color 字符前景色，RGB565 格式。
  * @param bgcolor 字符背景色，RGB565 格式。
  * @retval None
- * @note 负数会显示负号；最终显示范围和换行规则由 ST7735_show_string() 处理。
+ * @note 负数会显示负号；最终显示范围和换行规则由 ST7735_show_string_DMA() 处理。
  */
 void ST7735_show_integer(uint16_t x, uint16_t y, int32_t value, uint8_t min_digits,
                         uint8_t size, uint16_t color, uint16_t bgcolor)
@@ -690,7 +744,7 @@ void ST7735_show_integer(uint16_t x, uint16_t y, int32_t value, uint8_t min_digi
     }
     length += st7735_write_unsigned(&text[length], magnitude, min_digits);
     text[length] = '\0';
-    ST7735_show_string(x, y, text, size, color, bgcolor);
+    ST7735_show_string_DMA(x, y, text, size, color, bgcolor);
 }
 
 /**
@@ -719,8 +773,8 @@ static uint8_t st7735_format_float_bits(uint32_t bits, char *text,
     int32_t shift;
     uint64_t scaled_value;
 
-    if (decimal_digits > 6U) {
-        decimal_digits = 6U;
+    if (decimal_digits > ST7735_CHAR_1_WIDTH) {
+        decimal_digits = ST7735_CHAR_1_WIDTH;
     }
     if (min_integer_digits > 10U) {
         min_integer_digits = 10U;
@@ -784,7 +838,7 @@ static uint8_t st7735_format_float_bits(uint32_t bits, char *text,
  * @param color 字符前景色，RGB565 格式。
  * @param bgcolor 字符背景色，RGB565 格式。
  * @retval None
- * @note 浮点数先转换为文本，再通过 ST7735_show_string() 绘制。
+ * @note 浮点数先转换为文本，再通过 ST7735_show_string_DMA() 绘制。
  */
 void ST7735_show_decimal(uint16_t x, uint16_t y, float value,
                         uint8_t min_integer_digits, uint8_t decimal_digits,
@@ -801,7 +855,7 @@ void ST7735_show_decimal(uint16_t x, uint16_t y, float value,
     length = st7735_format_float_bits(converter.bits, text,
                                       min_integer_digits, decimal_digits);
     if (length != 0U) {
-        ST7735_show_string(x, y, text, size, color, bgcolor);
+        ST7735_show_string_DMA(x, y, text, size, color, bgcolor);
     }
 }
 
@@ -835,12 +889,12 @@ void ST7735_set_gamma(uint8_t gamma)
  * @brief SPI DMA 发送完成回调。
  * @param hspi 产生回调的 SPI 外设句柄。
  * @retval None
- * @note 当前 SPI 属于 ST7735 且仍有剩余数据时，继续发送下一数据块。
+ * @note 当前 SPI 属于 ST7735 且行文本 DMA 正在运行时，释放片选并清除忙状态。
  */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     if ((hspi->Instance == ST7735_SPI_INSTANCE) && (st7735_dma_busy != 0U)) {
-        (void)st7735_start_next_dma_block();
+        st7735_finish_dma();
     }
 }
 

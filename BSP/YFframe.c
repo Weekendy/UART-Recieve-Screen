@@ -8,6 +8,7 @@
   * 
   *         @data_tpye 有u8, i8, u16, i18, u32, i32, float类型，
   *         详见枚举类型 @YFframe_Type_TypeDef。
+  *         @data 内容为数据内容，长度随类型改变，小端格式
   *         @checksum 为从length到最后一个data的最后一位的校验和。
   *          
   *         简要逻辑链路为：
@@ -33,7 +34,7 @@ volatile uint8_t frame_ready;
 
 static volatile YFframe_TypeDef frame;
 volatile YFframe_TypeDef ready_frame;
-const char YYFRAME_DATA_TYPE_TEXT[7][6] = { "u8", "i8", "u16", "i16", "u32", "i32", "float" };
+const char YYFRAME_DATA_TYPE_TEXT[7][10] = { "u8\x20\x20\x20\x20", "i8\x20\x20\x20\x20", "u16\x20\x20\x20", "i16\x20\x20\x20", "u32\x20\x20\x20", "i32\x20\x20\x20", "float\x20" };
 
 static void YFframe_write_u32(char *text, uint8_t capacity, uint32_t value);
 static void YFframe_write_i32(char *text, uint8_t capacity, int32_t value);

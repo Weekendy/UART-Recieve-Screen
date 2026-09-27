@@ -114,7 +114,7 @@ void Screen_Menu_update(void)
                          ST7735_BLACK);
     ST7735_fill_rectangle(0U, 0U, ST7735_WIDTH, SCREEN_MENU_HEADER_HEIGHT,
                          ST7735_BLUE);
-    ST7735_show_string(2U, 4U, get_title(), 1U, ST7735_WHITE, ST7735_BLUE);
+    ST7735_show_string_DMA(2U, 4U, get_title(), 1U, ST7735_WHITE, ST7735_BLUE);
 
     for (index = current_list_start_index;
          (index < list_count) &&
@@ -126,12 +126,12 @@ void Screen_Menu_update(void)
         if (index == selected_index)
         {
             ST7735_show_char(0U, y, '>', 1U, ST7735_WHITE, ST7735_BLUE);
-            ST7735_show_string(8U, y, get_item_text(index), 1U,
+            ST7735_show_string_DMA(8U, y, get_item_text(index), 1U,
                                ST7735_WHITE, ST7735_BLUE);
         }
         else
         {
-            ST7735_show_string(8U, y, get_item_text(index), 1U,
+            ST7735_show_string_DMA(8U, y, get_item_text(index), 1U,
                                ST7735_WHITE, ST7735_BLACK);
         }
     }

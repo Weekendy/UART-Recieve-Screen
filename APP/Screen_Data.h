@@ -6,8 +6,11 @@
 
 #define CHAR_WIDTH 6
 #define CHAR_HEIGHT 8
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 160
 
 void Screen_Data_init(void);
 void Screen_Data_show_data(const uint8_t *cmd, YFframe_Data_Text_TypeDef *text);
+void Screen_Data_show_FPS();
 
 #endif /* SCREEN_DATA_H */

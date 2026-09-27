@@ -65,7 +65,7 @@
   #define __NO_RETURN                            __declspec(noreturn)
 #endif
 #ifndef   __USED
-  #define __USED                                 __attribute__((used))
+  #define __USED                                 __attribute__((data_text_used))
 #endif
 #ifndef   __WEAK
   #define __WEAK                                 __attribute__((weak))
