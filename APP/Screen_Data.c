@@ -1,6 +1,6 @@
 #include "Screen_Data.h"
 
-#include "ring.h"
+
 #include "st7735.h"
 #include "string.h"
 #include <stdarg.h>
@@ -18,7 +18,7 @@ static size_t data_text_used = 0U;
 
 static uint32_t FPS_update_ms = 0;
 static uint32_t FPS_count = 0;
-static char FPS_buf[10];
+static char FPS_buf[15];
 
 /***
  * @brief 屏幕数据显示初始化
@@ -73,6 +73,7 @@ static void text_buf_clear(void)
     data_text_buf[0] = '\0';
     data_text_used = 0;
 }
+
 /***
  * @brief 追加字符串到缓冲区
  * @param s 字符串
@@ -155,6 +156,46 @@ void Screen_Data_show_data(const uint8_t *cmd, YFframe_Data_Text_TypeDef *text)
     show_ms = HAL_GetTick();
 }
 
+/***
+ * @brief 显示原始数据
+ * @param raw 原始数据结构体
+ */
+void Screen_Data_show_data_raw(Ring_Raw_Data_TypeDef *raw)
+{
+    static const uint8_t RAW_PER_LINE = SCREEN_WIDTH / (5 * CHAR_WIDTH);
+    static const uint8_t LINES_TOTAL = ( SCREEN_HEIGHT / (2 * CHAR_HEIGHT) ) - 1;
+    static uint32_t raw_total = 0;
+    static uint32_t show_ms = 0;
+    data_x = 0;
+    data_y = 0;
+    text_buf_clear();
+
+    for (uint16_t i = 0; i < raw->length; i++)
+    {
+        data_text_used = text_buf_append(raw->hex_text[i]);
+        raw_total++;
+
+        if ((i % RAW_PER_LINE) == RAW_PER_LINE - 1 || i + 1U == raw->length)
+        {
+            data_text_used = text_buf_append("\n\n");
+        }
+        else
+        {
+            data_text_used = text_buf_append("\x20");
+        }
+    }
+    ST7735_show_string_DMA(data_x, data_y, data_text_buf, 1, ST7735_WHITE, ST7735_BLACK);
+    FPS_count++;
+
+
+    uint32_t ms = show_ms;
+    // log_println("%d\r\n", HAL_GetTick() - ms);
+    show_ms = HAL_GetTick();
+}
+
+/***
+ * @brief 显示帧率
+ */
 void Screen_Data_show_FPS()
 {
     if(HAL_GetTick() > FPS_update_ms + 1000)
@@ -165,13 +206,13 @@ void Screen_Data_show_FPS()
         static char FPS_count_buf[5];
         Screen_Data_write_u32(FPS_count_buf, sizeof(FPS_count_buf), FPS_count);
         str_joinv(FPS_buf, sizeof(FPS_buf), 0, "", 2, "FPS:", FPS_count_buf);
+        //数字部分保留3位数空间
+        for(uint8_t i = 0; i < 3 - strlen(FPS_count_buf); i++)
+        {
+            safe_cat(FPS_buf, sizeof(FPS_buf), strlen(FPS_buf), "\x20");
+        }
         ST7735_show_string(SCREEN_WIDTH - strlen(FPS_buf) * CHAR_WIDTH, SCREEN_HEIGHT - CHAR_HEIGHT, FPS_buf, 1, ST7735_WHITE, ST7735_BLACK); 
         
         FPS_count = 0;
     }
 }
-
-//@mark 帧率显示仍有残留，等待去除。
-//实现原始数据显示
-//ST7735在去除和引入DMA后注释仍需完善
-//感觉速度还能往上提，现在是多7个数据包一起扔过去46帧，还算可观。

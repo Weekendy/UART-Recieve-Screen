@@ -12,12 +12,11 @@
 
 typedef struct 
 {
-    uint16_t id;
-    uint16_t parent_id;
-    uint16_t first_child_id;
-    uint16_t next_sibling_id;
+    uint8_t id;
+    uint8_t parent_id;
+    uint8_t first_child_id;
+    uint8_t next_sibling_id;
     uint8_t type; // 0: menu, 1: operation
-    uint8_t is_selected;
     void (*to_operation_func)(uint16_t);
     const char *text;
 } Screen_Menu_t;

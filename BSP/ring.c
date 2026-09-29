@@ -6,16 +6,20 @@
   *          
   *         简要逻辑链路为：主机发送数据帧，本机接收到的数据，由空闲中断进入环形缓冲区的写入（生产者），
   *         由主函数while循环调用proc函数判断是否有数据帧解析后，并调用外部函数解析数据帧（消费者）。
+  *         或者由主函数调用proc_raw函数，将最近的环形缓冲区数据转华为文本存进结构体，
+  *         再调用get_ring_raw_text() 获取文本数据。（消费者）
   ******************************************************************************
   * @attention
   * 该文件依赖于HAL库中的UART和DMA和中断功能，因此需要在工程中启用UART和DMA，并且在CubeMX
-  * 中配置好相关的UART和DMA参数。并且需要引入外部的解析数据帧库。
+  * 中配置好相关的UART和DMA参数。并且需要引入外部的解析数据帧库，并且更换proc函数内的解析函数。
   * 
   * @note
   * 1. 将文件 ring.c 和 ring.h 添加到工程中。
   * 2. 在 main.c 中调用 ring_init() 初始化环形缓冲区。
   * 3. 在 ring_proc 中添加外部的解析数据帧函数。
-  * 4. 在 main.c 中调用 ring_proc() 函数。
+  * 4. 在 main.c 中调用 ring_proc() 函数，再调用外部函数获取数据。  或者
+  * 4. 在 main.c 中调用 ring_proc_raw() 函数。
+  * 5. 在 main.c 中调用 ring_proc_raw_text() 函数获取文本数据。
   ******************************************************************************
   */
  
@@ -25,6 +29,34 @@ volatile uint8_t rx_pending;
 volatile uint8_t rx_restart_pending;
 volatile uint32_t ring_overflow_count;
 volatile Ring_TypeDef ring;
+
+static Ring_Raw_Data_TypeDef ring_raw;
+static char ring_raw_text_buf[5] = {0};
+
+static void ring_raw_clear(void);
+
+/**
+ * @brief 将 uint8_t 数值转换为固定格式的十六进制文本。
+ * @param text 输出字符串容器，至少需要 5 个字节。
+ * @param value 待转换的 uint8_t 数值。
+ * @retval None
+ * @note 输出格式固定为 "0xXX"，并自动追加字符串结束符 '\0'。
+ */
+void ring_u8_to_hex_text(char *text, uint8_t value)
+{
+    static const char hex_digits[] = "0123456789ABCDEF";
+
+    if (text == NULL)
+    {
+        return;
+    }
+
+    text[0] = '0';
+    text[1] = 'x';
+    text[2] = hex_digits[(value >> 4U) & 0x0FU];
+    text[3] = hex_digits[value & 0x0FU];
+    text[4] = '\0';
+}
 
 /***
  * @brief 获取当前缓冲区当前下标的下一个下标（环形缓冲区）
@@ -46,7 +78,7 @@ void ring_init(void)
     ring.overflow_flag = 0;
     ring_overflow_count = 0U;
 
-
+    ring_raw.length = 0U;
 
     ring_start();
 }
@@ -115,7 +147,7 @@ RING_STATUS_TypeDef ring_proc(void)
         // 当读总数小于写总数，则开始解析数据
         while (ring.read_total < write_total)
         {
-            ring.read_pos = (uint16_t)(ring.read_total % RING_BUFFER_SIZE);
+            ring.read_pos = (ring.read_total % RING_BUFFER_SIZE);
             (void)YFframe_parse_byte(ring.buffer[ring.read_pos]);
             ring.read_total++;
         }
@@ -125,6 +157,114 @@ RING_STATUS_TypeDef ring_proc(void)
     rx_pending = 0;
     // 返回接收状态
     return received ? RING_OK : RING_UNREADY;
+}
+
+/***
+ * @brief 获取环形缓冲区原始数据
+ * @param length 获取最新的原始数据长度
+ * @retval ring状态
+ */
+RING_STATUS_TypeDef ring_proc_raw(uint16_t length)
+{
+    static uint32_t last_write_total = 0U;
+    uint16_t read_end_pos = 0U;
+    uint16_t read_start_pos = 0U;
+    uint8_t blank = 0U;
+    ring_raw.length = 0U;
+
+    if(length > RING_BUFFER_SIZE || length == 0U)
+    {
+        return RING_ERROR;
+    }
+    if(ring.write_total == last_write_total)
+    {
+        return RING_UNREADY;
+    }
+
+    // 如果重启挂起标志为1，则重启环形缓冲区
+    if (rx_restart_pending != 0U)
+    {
+        rx_restart_pending = 0U;
+        ring_raw_clear();
+        ring.read_pos = 0U;
+        ring.read_total = 0U;
+        ring.write_total = 0U;
+        ring.dma_write_pos = 0U;
+        ring.overflow_flag = 0U;
+        // 重启DMA，若未成功，则继续重启挂起，等待下一次重启
+        if (ring_start() != RING_OK)
+        {
+            rx_restart_pending = 1U;
+            return RING_ERROR;
+        }
+    }
+
+    // 确定读取起始位置和结束位置
+    // 如果写入总数大于要读长度，则直接截取。
+    if(ring.write_total >= length)
+    {
+        read_end_pos = ring.write_total % RING_BUFFER_SIZE;
+        read_start_pos  = (ring.write_total - length)% RING_BUFFER_SIZE;
+    }
+    // 如果写入总数小于要读长度，则截取开头部分。
+    else
+    {
+        read_end_pos = ring.write_total % RING_BUFFER_SIZE;
+        read_start_pos = 0;
+    }
+    // 判断环形缓冲区需要的的实际区域，并获取16进制文本
+    if(read_start_pos < read_end_pos)
+    {
+        for(uint16_t i = read_start_pos; i < read_end_pos; i++)
+        {
+            ring_u8_to_hex_text(ring_raw_text_buf, ring.buffer[i]);
+            strcpy(ring_raw.hex_text[ring_raw.length], ring_raw_text_buf);
+            ring_raw.length++;
+        }
+    }
+    else if(read_start_pos > read_end_pos)
+    {
+        for(uint16_t i = read_start_pos; i < RING_BUFFER_SIZE; i++)
+        {
+            ring_u8_to_hex_text(ring_raw_text_buf, ring.buffer[i]);
+            strcpy(ring_raw.hex_text[ring_raw.length], ring_raw_text_buf);
+            ring_raw.length++;
+        }
+        for(uint16_t i = 0; i < read_end_pos; i++)
+        {
+            ring_u8_to_hex_text(ring_raw_text_buf, ring.buffer[i]);
+            strcpy(ring_raw.hex_text[ring_raw.length], ring_raw_text_buf);
+            ring_raw.length++;
+        }
+    }
+
+    // 保存本次读取位置
+    last_write_total = ring.write_total;
+    // 接收挂起位置0
+    rx_pending = 0;
+    // 返回接收状态
+    return RING_OK ;
+}
+
+/***
+ * @brief 清空原始数据
+ */
+static void ring_raw_clear(void)
+{
+    ring_raw.length = 0U;
+}
+
+/***
+ * @brief 通过获取原始数据结构体
+ * @param raw 外部调用该函数的文件定义的原始数据结构体
+ */
+void ring_get_raw_text(Ring_Raw_Data_TypeDef *raw)
+{
+    for(uint8_t i = 0; i < ring_raw.length; i++)
+    {
+        strcpy(raw->hex_text[i], ring_raw.hex_text[i]);
+    }
+    raw->length = ring_raw.length;
 }
 
 /***

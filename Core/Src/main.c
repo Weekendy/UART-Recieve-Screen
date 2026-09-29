@@ -27,10 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Control.h"
-#include "ring.h"
-#include "YFframe.h"
-#include "log.h"
-#include "Screen_Data.h"
 
 /* USER CODE END Includes */
 
@@ -74,9 +70,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  uint8_t cmd;
-  static YFframe_Data_Text_TypeDef text;
-  static uint32_t reported_ring_overflow_count;
+  
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -101,10 +95,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  log_init();
-  ring_init();
-  YFframe_init();
-  Screen_Data_init();
+  Control_init();
 
 
   /* USER CODE END 2 */
@@ -113,18 +104,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    ring_proc();
-    if (ring_overflow_count != reported_ring_overflow_count)
-    {
-      log_printf("ring overflow=%u\r\n", (unsigned int)ring_overflow_count);
-      reported_ring_overflow_count = ring_overflow_count;
-    }
-    
-    if (YFframe_get_cmdAdata(&cmd, &text) == YFFRAME_OK)
-    {
-        Screen_Data_show_data(&cmd, &text);
-    }
-    Screen_Data_show_FPS();
+    Control_display_proc();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

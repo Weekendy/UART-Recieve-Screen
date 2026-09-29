@@ -7,12 +7,12 @@
 
 typedef enum
 {
-    Control_DISPLAY_PACKAGE = 0,
-    Control_DISPLAY_RAW_DATA = 1,
+    Control_DISPLAY_PACKAGE_MODE = 0,
+    Control_DISPLAY_RAW_DATA_MODE = 1,
 } Control_Mode_TypeDef;
 
 void Control_init(void);
-void Control_display_data_Proc(void); 
+void Control_display_proc(void); 
 void Control_Key_Proc(void);
 
 
