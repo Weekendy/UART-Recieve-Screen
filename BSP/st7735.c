@@ -315,7 +315,7 @@ void ST7735_fill_rectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint1
  */
 void ST7735_fill_screen(uint16_t color)
 {
-
+    ST7735_fill_rectangle(0, 0, ST7735_WIDTH, ST7735_HEIGHT, color);
 }
 
 /**

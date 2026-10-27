@@ -70,7 +70,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-  
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -105,6 +105,7 @@ int main(void)
   while (1)
   {
     Control_display_proc();
+    Control_key_proc();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

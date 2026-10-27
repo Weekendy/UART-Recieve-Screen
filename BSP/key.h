@@ -1,9 +1,13 @@
 /**
- * @file key.h
- * @brief GPIO 按键去抖、短按、长按和双击事件接口。
- *
- * 应在主循环中持续调用 key_scan()；事件仅在状态转换时返回一次。
- */
+  ******************************************************************************
+  * @file    key.h
+  * @brief   这个文件包含了所有key.c的结构体和enum定义，以及函数声明。
+  ******************************************************************************
+  * @attention
+  * 该文件依赖于HAL库中的GPIO功能，因此需要在工程中启用GPIO，并且在CubeMX
+  * 中配置好相关的GPIO参数。
+  ******************************************************************************
+  */
 #ifndef KEY_H
 #define KEY_H
 
@@ -12,7 +16,7 @@
 #include <stdint.h>
 
 #ifndef KEY_DEBOUNCE_MS
-#define KEY_DEBOUNCE_MS      10U
+#define KEY_DEBOUNCE_MS      1U
 #endif
 
 #ifndef KEY_LONG_PRESS_MS

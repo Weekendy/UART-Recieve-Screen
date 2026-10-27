@@ -2,22 +2,12 @@
 #define SETTINGS_H
 
 #include "main.h"
+#include "YFframe.h"
 
-extern uint32_t BAUDRATE_LSIT[];
-extern uint8_t BAUDRATE_LSIT_SIZE;
+extern const uint32_t BAUDRATE_LSIT[];
+extern const uint8_t BAUDRATE_LSIT_SIZE;
 extern uint8_t baudrate_index;
 extern uint8_t data_frame_enable;
-
-typedef enum
-{
-    FRAME_U8_TYPE,
-    FRAME_I8_TYPE,
-    FRAME_U16_TYPE,
-    FRAME_I16_TYPE,
-    FRAME_U32_TYPE,
-    FRAME_I32_TYPE,
-    FRAME_FLOAT_TYPE,
-} YFframe_Type_TypeDef;
 
 typedef struct
 {

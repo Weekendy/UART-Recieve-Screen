@@ -211,7 +211,7 @@ void Screen_Data_show_FPS()
         {
             safe_cat(FPS_buf, sizeof(FPS_buf), strlen(FPS_buf), "\x20");
         }
-        ST7735_show_string(SCREEN_WIDTH - strlen(FPS_buf) * CHAR_WIDTH, SCREEN_HEIGHT - CHAR_HEIGHT, FPS_buf, 1, ST7735_WHITE, ST7735_BLACK); 
+        ST7735_show_string(SCREEN_WIDTH - strlen(FPS_buf) * CHAR_WIDTH, SCREEN_HEIGHT - CHAR_HEIGHT, FPS_buf, 1, ST7735_GREEN, ST7735_BLACK); 
         
         FPS_count = 0;
     }

@@ -50,6 +50,8 @@ extern volatile uint32_t ring_overflow_count;
 void ring_u8_to_hex_text(char *text, uint8_t value);
 void ring_init(void);
 RING_STATUS_TypeDef ring_start(void);
+RING_STATUS_TypeDef ring_stop(void);
+RING_STATUS_TypeDef ring_reset(void);
 RING_STATUS_TypeDef ring_proc(void);
 RING_STATUS_TypeDef ring_proc_raw(uint16_t length);
 void ring_get_raw_text(Ring_Raw_Data_TypeDef *raw);

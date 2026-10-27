@@ -92,6 +92,21 @@ RING_STATUS_TypeDef ring_start(void)
     return HAL_UARTEx_ReceiveToIdle_DMA(&huart1, ring.buffer, RING_BUFFER_SIZE) ? RING_ERROR : RING_OK;
 }
 
+RING_STATUS_TypeDef ring_stop(void)
+{
+    return HAL_UART_DMAStop(&huart1) ? RING_ERROR : RING_OK;   
+}
+
+RING_STATUS_TypeDef ring_reset(void)
+{
+    ring.read_pos = 0;
+    ring.read_total = 0U;
+    ring.write_total = 0U;
+    ring.dma_write_pos = 0U;
+    ring.overflow_flag = 0;
+    ring_overflow_count = 0U;
+}
+
 /***
  * @brief 读取环形缓冲区解析一至多个字节
  * @retval ring状态
